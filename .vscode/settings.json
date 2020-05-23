@@ -1,3 +1,9 @@
 {
-    "python.pythonPath": "./.venv/bin/python3.8"
+  "python.pythonPath": ".venv/bin/python3.8",
+  "python.linting.banditEnabled": true,
+  "python.linting.enabled": true,
+  "python.autoComplete.addBrackets": true,
+  "python.formatting.provider": "black",
+  "editor.formatOnSave": true,
+  "editor.formatOnType": true
 }
