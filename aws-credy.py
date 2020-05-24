@@ -2,15 +2,9 @@ import configparser
 import json
 import os
 import subprocess
+import sys
 
 import click
-
-##############
-# profile = "cribl-diag"
-# secret_key = "my-secret-key"
-# access_key = "my-access-key"
-# session_token = "my-session-token"
-###############
 
 creds = configparser.ConfigParser()
 file_path = os.path.expanduser("~/.aws/credentials")
@@ -18,10 +12,14 @@ creds.read(file_path)
 
 
 @click.command()
-@click.option("--profile", "-p")
+@click.option("--profile", "-p", help="Name of AWS profile as listed in ~/.aws/config")
 def main(profile):
+
+    if not profile:
+        return
+
     sso_start_url, sso_region, sso_account_id, sso_role_name = get_sso_params(profile)
-    access_token = get_access_token(sso_start_url, sso_region)
+    access_token = get_access_token(sso_start_url, sso_region, profile)
     profile_access_key, profile_secret_key, profile_token = get_role_credentials(
         access_token, sso_account_id, sso_role_name, sso_region, profile
     )
@@ -30,9 +28,11 @@ def main(profile):
         creds.remove_section(profile)
         add_profile(profile, profile_access_key, profile_secret_key, profile_token)
         save_file()
+        return f"Credentials for {profile} updated."
     else:
         add_profile(profile, profile_access_key, profile_secret_key, profile_token)
         save_file()
+        return f"Credentials for {profile} added to credentials file."
 
 
 def get_sso_params(profile):
@@ -47,10 +47,15 @@ def get_sso_params(profile):
     return sso_start_url, sso_region, sso_account_id, sso_role_name
 
 
-def get_access_token(sso_start_url, sso_region):
+def get_access_token(sso_start_url, sso_region, profile):
     sso_path = os.path.expanduser("~/.aws/sso/cache")
-    for f in os.listdir(sso_path):
-        if f.endswith(".json") and not f.startswith("botocore"):
+    files = os.listdir(sso_path)
+    for f in files:
+        if (
+            f.endswith(".json")
+            and len(f.split(".")[0]) == 40
+            and int(f.split(".")[0], 16)
+        ):
             ff = open(f"{sso_path}/{f}", "r")
             contents = ff.readline()
             ff.close()
@@ -60,9 +65,19 @@ def get_access_token(sso_start_url, sso_region):
             ):
                 return json.loads(contents)["accessToken"]
 
+    login(profile)
+    return get_access_token(sso_start_url, sso_region, profile)
+
+
+def login(profile):
+    subprocess.run(
+        ["aws", "sso", "login", "--profile", profile],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
 
 def get_role_credentials(access_token, account_id, role_name, region, profile):
-
     process = subprocess.run(
         [
             "aws",
@@ -79,17 +94,40 @@ def get_role_credentials(access_token, account_id, role_name, region, profile):
             "--profile",
             profile,
         ],
-        check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-
-    output = process.stdout.decode(encoding="utf-8")
-    creds = json.loads(output)
-    access_key = creds["roleCredentials"]["accessKeyId"]
-    secret_key = creds["roleCredentials"]["secretAccessKey"]
-    session_token = creds["roleCredentials"]["sessionToken"]
-    return access_key, secret_key, session_token
+    if "UnauthorizedException" in process.stderr.decode(encoding="utf-8"):
+        login(profile)
+        process = subprocess.run(
+            [
+                "aws",
+                "sso",
+                "get-role-credentials",
+                "--access-token",
+                access_token,
+                "--account-id",
+                account_id,
+                "--role-name",
+                role_name,
+                "--region",
+                region,
+                "--profile",
+                profile,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    elif len(process.stderr.decode(encoding="utf-8")) > 1:
+        sys.tracebacklimit = 0
+        raise Exception(process.stderr.decode(encoding="utf-8"))
+    else:
+        output = process.stdout.decode(encoding="utf-8")
+        creds = json.loads(output)
+        access_key = creds["roleCredentials"]["accessKeyId"]
+        secret_key = creds["roleCredentials"]["secretAccessKey"]
+        session_token = creds["roleCredentials"]["sessionToken"]
+        return access_key, secret_key, session_token
 
 
 def save_file():
