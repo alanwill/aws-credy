@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import click
+import pkg_resources.py2_warn
 
 creds = configparser.ConfigParser()
 file_path = os.path.expanduser("~/.aws/credentials")
@@ -28,11 +29,11 @@ def main(profile):
         creds.remove_section(profile)
         add_profile(profile, profile_access_key, profile_secret_key, profile_token)
         save_file()
-        return f"Credentials for {profile} updated."
+        click.echo(f"Credentials for {profile} updated.")
     else:
         add_profile(profile, profile_access_key, profile_secret_key, profile_token)
         save_file()
-        return f"Credentials for {profile} added to credentials file."
+        click.echo(f"Credentials for {profile} added to credentials file.")
 
 
 def get_sso_params(profile):
