@@ -5,7 +5,6 @@ import subprocess
 import sys
 
 import click
-import pkg_resources.py2_warn
 
 creds = configparser.ConfigParser()
 file_path = os.path.expanduser("~/.aws/credentials")
@@ -100,7 +99,7 @@ def get_role_credentials(access_token, account_id, role_name, region, profile):
     )
     if "UnauthorizedException" in process.stderr.decode(encoding="utf-8"):
         login(profile)
-        process = subprocess.run(
+        subprocess.run(
             [
                 "aws",
                 "sso",
