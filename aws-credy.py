@@ -5,8 +5,8 @@ import subprocess
 import sys
 
 import click
-import pkg_resources.py2_warn
 
+aws_executable = "/usr/local/bin/aws"
 creds = configparser.ConfigParser()
 file_path = os.path.expanduser("~/.aws/credentials")
 creds.read(file_path)
@@ -72,7 +72,7 @@ def get_access_token(sso_start_url, sso_region, profile):
 
 def login(profile):
     subprocess.run(
-        ["aws", "sso", "login", "--profile", profile],
+        [aws_executable, "sso", "login", "--profile", profile],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -81,7 +81,7 @@ def login(profile):
 def get_role_credentials(access_token, account_id, role_name, region, profile):
     process = subprocess.run(
         [
-            "aws",
+            aws_executable,
             "sso",
             "get-role-credentials",
             "--access-token",
@@ -100,9 +100,9 @@ def get_role_credentials(access_token, account_id, role_name, region, profile):
     )
     if "UnauthorizedException" in process.stderr.decode(encoding="utf-8"):
         login(profile)
-        process = subprocess.run(
+        subprocess.run(
             [
-                "aws",
+                aws_executable,
                 "sso",
                 "get-role-credentials",
                 "--access-token",
